@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Visor de Cómic</title>
+    <style>
+        .container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+        .image-container {
+            flex: 1;
+        }
+        img, svg {
+            max-width: 100%;
+            border: 1px solid #ccc;
+        }
+        h2 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="image-container">
+            <h2>Imagen Original</h2>
+            <img src="test.jpg" alt="Imagen original">
+        </div>
+        <div class="image-container">
+            <h2>Paneles Detectados</h2>
+            <object data="comic_panels.svg" type="image/svg+xml"></object>
+        </div>
+    </div>
+
+    <script>
+        function handlePanelClick(panelNumber) {
+            console.log(`Panel ${panelNumber} clickeado`);
+            // Aquí puedes agregar la lógica que necesites para manejar los clicks
+        }
+    </script>
+</body>
+</html>
