@@ -1,43 +1,1038 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <title>Visor de Cómic</title>
+    <title>Editor de Partitura</title>
     <style>
+        .partitura {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            padding: 20px;
+            background-color: #fff;
+            min-height: 200px;
+            border: 1px solid #ccc;
+        }
+
+        .compas {
+            min-width: 200px;
+            height: auto;
+            min-height: 120px;
+            border: 2px solid #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            position: relative;
+            cursor: pointer;
+            padding: 20px 15px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        .controles {
+            margin: 20px;
+        }
+
+        button {
+            font-size: 20px;
+            margin: 0 10px;
+            padding: 5px 15px;
+            cursor: pointer;
+        }
+
+        .numero-compas {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .acordes,
+        .letras {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            min-height: 50px;
+            padding: 5px;
+            width: 100%;
+        }
+
+        .contenedor-acorde-letra {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .acorde,
+        .letra {
+            min-width: 80px;
+            width: auto;
+            height: auto;
+            min-height: 50px;
+            padding: 5px 10px;
+            border: 1px solid transparent;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            position: relative;
+            transition: all 0.3s ease;
+            background-color: white;
+            word-break: break-word;
+        }
+
+        .letra {
+            border: 1px dashed #ccc;
+            /* Borde punteado para diferenciar */
+            color: #666;
+            /* Color más suave para las letras */
+        }
+
+        .acorde.nuevo,
+        .letra.nuevo {
+            color: #666;
+        }
+
+        .acorde.escrito {
+            color: #2ecc71;
+        }
+
+        .letra.escrito {
+            color: #3498db;
+            /* Color diferente para letras escritas */
+        }
+
+        .acorde.seleccionado,
+        .letra.seleccionado {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .acorde:hover .eliminar-acorde,
+        .letra:hover .eliminar-letra {
+            display: block;
+        }
+
+        .eliminar-acorde,
+        .eliminar-letra,
+        .eliminar-compas {
+            display: none;
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 14px;
+            line-height: 20px;
+            cursor: pointer;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .compas:hover .eliminar-compas {
+            display: block;
+        }
+
+        .acorde-input,
+        .letra-input {
+            min-width: 80px;
+            width: auto;
+            height: auto;
+            min-height: 50px;
+            font-size: 24px;
+            text-align: center;
+            border: 1px solid #999;
+            padding: 5px 10px;
+            box-sizing: border-box;
+        }
+
+        .agregar-acorde-btn {
+            position: absolute;
+            /* Cambiado a posición absoluta */
+            right: -15px;
+            /* Posicionado a la derecha */
+            top: 50%;
+            /* Centrado verticalmente */
+            transform: translateY(-50%);
+            /* Ajuste fino del centrado vertical */
+            width: 30px;
+            height: 30px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .agregar-acorde-btn:hover {
+            background-color: #27ae60;
+        }
+
+        .compas.arrastrando,
+        .acorde.arrastrando,
+        .letra.arrastrando {
+            opacity: 0.5;
+            cursor: move;
+        }
+
+        .compas.drop-izquierda {
+            border-left: 3px solid #3498db;
+        }
+
+        .compas.drop-derecha {
+            border-right: 3px solid #3498db;
+        }
+
+        .acorde.drop-izquierda,
+        .letra.drop-izquierda {
+            border-left: 3px solid #3498db;
+        }
+
+        .acorde.drop-derecha,
+        .letra.drop-derecha {
+            border-right: 3px solid #3498db;
+        }
+
+        .acordes.drop-activo,
+        .letras.drop-activo {
+            background-color: #f0f9ff;
+            border: 2px dashed #3498db;
+        }
+
+        .contenedor-compas {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            position: relative;
+            /* Añadido para posicionamiento relativo */
+        }
+
+        .json-output {
+            margin: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+        .json-container {
+            margin: 20px;
+        }
+
+        .json-container button {
+            margin-bottom: 10px;
+        }
+
+        /* Agregar al CSS existente */
         .container {
             display: flex;
             gap: 20px;
             padding: 20px;
+            height: 100vh;
         }
-        .image-container {
+
+        .imagenes-container {
+            width: 300px;
+            border-right: 1px solid #ccc;
+            padding-right: 20px;
+        }
+
+        .imagenes-scroll {
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .main-content {
             flex: 1;
+            overflow-y: auto;
         }
-        img, svg {
-            max-width: 100%;
+
+        .imagen-compas {
+            position: relative;
+            width: 100%;
             border: 1px solid #ccc;
+            padding: 10px;
+            background: #fff;
+            border-radius: 4px;
         }
-        h2 {
+
+        .imagen-compas img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .imagen-compas .numero-compas {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .imagen-upload {
+            width: 100%;
+            padding: 20px;
+            border: 2px dashed #ccc;
             text-align: center;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .imagen-upload:hover {
+            border-color: #3498db;
+            background: #f7f9fc;
+        }
+
+        .eliminar-imagen {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            cursor: pointer;
+        }
+
+        #images-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+        /* ... existing styles ... */
+        .nombre-compas {
+            position: absolute;
+            top: 2px;
+            right: 25px;
+            /* Espacio para no solapar con el botón de eliminar */
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            padding: 2px 5px;
+            border: 1px dashed transparent;
+        }
+
+        .nombre-compas:hover {
+            border-color: #ccc;
+        }
+
+        .nombre-compas-input {
+            position: absolute;
+            top: 2px;
+            right: 25px;
+            font-size: 12px;
+            padding: 2px 5px;
+            border: 1px solid #999;
+        }
+
+
+        /* ... existing styles ... */
+        .compas.seleccionado {
+            background-color: #e3f2fd;
+            /* Color azul claro para el compás seleccionado */
+            border: 2px solid #2196f3;
+            /* Borde azul más oscuro */
+        }
+
+        .imagen-compas.seleccionado {
+            background-color: #e3f2fd;
+            border: 2px solid #2196f3;
+            box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <div class="image-container">
-            <h2>Imagen Original</h2>
-            <img src="test.jpg" alt="Imagen original">
+        <!-- Nuevo contenedor para imágenes -->
+        <div class="imagenes-container">
+            <h3>Imágenes</h3>
+            <div class="imagenes-scroll" id="imagenes-scroll">
+                <!-- Las imágenes se agregarán aquí dinámicamente -->
+                <div id="images-preview"></div>
+                <pre id="images-info"></pre> <!-- Nuevo elemento para mostrar el JSON -->
+            </div>
         </div>
-        <div class="image-container">
-            <h2>Paneles Detectados</h2>
-            <object data="comic_panels.svg" type="image/svg+xml"></object>
+
+        <!-- Contenedor principal derecho -->
+        <div class="main-content">
+            <div class="controles">
+                <button onclick="agregarCompas()">+</button>
+                <button onclick="eliminarCompas()">-</button>
+            </div>
+            <div class="partitura" id="partitura">
+            </div>
+            <div class="json-container">
+                <div id="json-output" class="json-output"></div>
+            </div>
         </div>
     </div>
 
+
     <script>
-        function handlePanelClick(panelNumber) {
-            console.log(`Panel ${panelNumber} clickeado`);
-            // Aquí puedes agregar la lógica que necesites para manejar los clicks
+        let contadorCompases = 0;
+        let acordeSeleccionado = null;
+        let letraSeleccionada = null;
+        let elementoArrastrado = null;
+        let compasSeleccionado = null;
+
+        function agregarCompas() {
+            contadorCompases++;
+            const imagenId = `imagen-${Date.now()}`; // Identificador único para relacionar compás e imagen
+
+            const partitura = document.getElementById('partitura');
+            const nuevoCompas = document.createElement('div');
+            nuevoCompas.className = 'compas';
+            nuevoCompas.draggable = true;
+            nuevoCompas.setAttribute('data-imagen-id', imagenId);
+
+            nuevoCompas.addEventListener('dragstart', dragStart);
+            nuevoCompas.addEventListener('dragend', dragEnd);
+            nuevoCompas.addEventListener('dragover', dragOver);
+            nuevoCompas.addEventListener('drop', drop);
+
+            const eliminarCompasBtn = document.createElement('div');
+            eliminarCompasBtn.className = 'eliminar-compas';
+            eliminarCompasBtn.textContent = '×';
+            eliminarCompasBtn.onclick = (e) => {
+                e.stopPropagation();
+                // Eliminar también la imagen asociada
+                const contenedorImagen = document.querySelector(`[data-imagen-id="${imagenId}"]`);
+                if (contenedorImagen) {
+                    contenedorImagen.remove();
+                }
+                partitura.removeChild(nuevoCompas);
+                actualizarNumerosCompases();
+            };
+
+            const numeroCompas = document.createElement('div');
+            numeroCompas.className = 'numero-compas';
+            numeroCompas.textContent = contadorCompases;
+
+            const nombreCompas = document.createElement('div');
+            nombreCompas.className = 'nombre-compas';
+            nombreCompas.textContent = 'Sin título';
+            nombreCompas.onclick = function (e) {
+                e.stopPropagation();
+                const input = document.createElement('input');
+                input.className = 'nombre-compas-input';
+                input.value = nombreCompas.textContent;
+
+                input.onblur = function () {
+                    const nuevoNombre = input.value || 'Sin título';
+                    nombreCompas.textContent = nuevoNombre;
+                    nuevoCompas.replaceChild(nombreCompas, input);
+
+                    // Actualizar el nombre en el contenedor de imagen
+                    const contenedorImagen = document.querySelector(`[data-imagen-id="${imagenId}"]`);
+                    if (contenedorImagen) {
+                        const nombreImagen = contenedorImagen.querySelector('.nombre-imagen');
+                        if (nombreImagen) {
+                            nombreImagen.textContent = nuevoNombre;
+                        }
+                    }
+                    actualizarJSON();
+                };
+
+                input.onkeypress = function (e) {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                    }
+                };
+
+                nuevoCompas.replaceChild(input, nombreCompas);
+                input.focus();
+            };
+
+            const acordesDiv = document.createElement('div');
+            acordesDiv.className = 'acordes';
+
+            acordesDiv.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                acordesDiv.classList.add('drop-activo');
+            });
+
+            acordesDiv.addEventListener('dragleave', (e) => {
+                acordesDiv.classList.remove('drop-activo');
+            });
+
+            acordesDiv.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                acordesDiv.classList.remove('drop-activo');
+
+                if (elementoArrastrado && elementoArrastrado.classList.contains('contenedor-acorde-letra')) {
+                    const acordeDestino = e.target.closest('.contenedor-acorde-letra');
+                    if (acordeDestino) {
+                        const rect = acordeDestino.getBoundingClientRect();
+                        const mitad = (rect.left + rect.right) / 2;
+                        if (e.clientX < mitad) {
+                            acordesDiv.insertBefore(elementoArrastrado, acordeDestino);
+                        } else {
+                            acordesDiv.insertBefore(elementoArrastrado, acordeDestino.nextSibling);
+                        }
+                    } else {
+                        acordesDiv.appendChild(elementoArrastrado);
+                    }
+                }
+            });
+
+            const contenedorCompas = document.createElement('div');
+            contenedorCompas.className = 'contenedor-compas';
+
+            const agregarAcordeBtn = document.createElement('button');
+            agregarAcordeBtn.className = 'agregar-acorde-btn';
+            agregarAcordeBtn.textContent = '+';
+            agregarAcordeBtn.onclick = (e) => {
+                e.stopPropagation();
+                agregarAcordeYLetra(acordesDiv);
+            };
+
+            agregarAcordeYLetra(acordesDiv);
+
+            contenedorCompas.appendChild(acordesDiv);
+            contenedorCompas.appendChild(agregarAcordeBtn);
+
+            nuevoCompas.appendChild(eliminarCompasBtn);
+            nuevoCompas.appendChild(numeroCompas);
+            nuevoCompas.appendChild(nombreCompas);
+            nuevoCompas.appendChild(contenedorCompas);
+            partitura.appendChild(nuevoCompas);
+
+            // Agregar el contenedor de imagen
+            const imagenesScroll = document.getElementById('imagenes-scroll');
+            const contenedorImagen = crearContenedorImagen(contadorCompases);
+            contenedorImagen.setAttribute('data-imagen-id', imagenId);
+            imagenesScroll.appendChild(contenedorImagen);
+
+
+            nuevoCompas.addEventListener('click', (e) => {
+                e.stopPropagation();
+                seleccionarCompas(nuevoCompas);
+            });
         }
+
+        function crearContenedorImagen(numeroCompas) {
+            const contenedor = document.createElement('div');
+            contenedor.className = 'imagen-compas';
+            contenedor.id = `imagen-compas-${numeroCompas}`;
+
+            const numeroLabel = document.createElement('div');
+            numeroLabel.className = 'numero-compas';
+            numeroLabel.innerHTML = `Compás ${numeroCompas} - <span class="nombre-imagen">Sin título</span>`;
+
+            const uploadDiv = document.createElement('div');
+            uploadDiv.className = 'imagen-upload';
+            uploadDiv.textContent = 'Haga clic o arrastre una imagen aquí';
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.jpg,.jpeg,.svg';
+            input.style.display = 'none';
+
+            uploadDiv.onclick = (e) => {
+                e.preventDefault();
+                input.click();
+            };
+
+            input.onchange = async function (e) {
+                try {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+
+                        reader.onload = function (event) {
+                            try {
+                                const img = document.createElement('img');
+                                img.src = event.target.result;
+
+                                // Reemplazar el div de upload con la imagen
+                                if (uploadDiv.parentNode) {
+                                    contenedor.replaceChild(img, uploadDiv);
+                                }
+
+                                // Agregar botón de eliminar
+                                const eliminarBtn = document.createElement('div');
+                                eliminarBtn.className = 'eliminar-imagen';
+                                eliminarBtn.textContent = '×';
+                                eliminarBtn.onclick = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (img.parentNode) {
+                                        contenedor.removeChild(img);
+                                    }
+                                    if (eliminarBtn.parentNode) {
+                                        contenedor.removeChild(eliminarBtn);
+                                    }
+                                    contenedor.appendChild(uploadDiv);
+                                    actualizarJSON();
+                                };
+                                contenedor.appendChild(eliminarBtn);
+                                actualizarJSON();
+                            } catch (error) {
+                                console.error('Error al procesar la imagen:', error);
+                            }
+                        };
+
+                        reader.onerror = function (error) {
+                            console.error('Error al leer el archivo:', error);
+                        };
+
+                        reader.readAsDataURL(file);
+                    }
+                } catch (error) {
+                    console.error('Error al manejar el archivo:', error);
+                }
+            };
+
+            uploadDiv.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadDiv.style.background = '#f0f0f0';
+            });
+
+            uploadDiv.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadDiv.style.background = '';
+            });
+
+            uploadDiv.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadDiv.style.background = '';
+
+                try {
+                    const file = e.dataTransfer.files[0];
+                    if (file && (file.type.includes('jpeg') || file.type.includes('svg'))) {
+                        // Crear un nuevo FileList manualmente
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+                        input.files = dt.files;
+
+                        // Disparar el evento change directamente
+                        const event = new Event('change');
+                        input.dispatchEvent(event);
+                    }
+                } catch (error) {
+                    console.error('Error al manejar el archivo arrastrado:', error);
+                }
+            });
+
+            contenedor.appendChild(numeroLabel);
+            contenedor.appendChild(uploadDiv);
+            contenedor.appendChild(input);
+
+            return contenedor;
+        }
+
+        function agregarAcordeYLetra(acordesDiv) {
+            const contenedor = document.createElement('div');
+            contenedor.className = 'contenedor-acorde-letra';
+            contenedor.draggable = true;
+
+            contenedor.addEventListener('dragstart', (e) => {
+                elementoArrastrado = contenedor;
+                contenedor.classList.add('arrastrando');
+                e.stopPropagation();
+            });
+
+            contenedor.addEventListener('dragend', (e) => {
+                contenedor.classList.remove('arrastrando');
+                elementoArrastrado = null;
+                document.querySelectorAll('.drop-activo').forEach(el => el.classList.remove('drop-activo'));
+            });
+
+            // Crear acorde
+            const acorde = crearElementoEditable('acorde', '%');
+
+            // Crear letra
+            const letra = crearElementoEditable('letra', '');
+
+            contenedor.appendChild(acorde);
+            contenedor.appendChild(letra);
+            acordesDiv.appendChild(contenedor);
+        }
+
+        function crearElementoEditable(tipo, textoInicial) {
+            const elemento = document.createElement('div');
+            elemento.className = `${tipo} nuevo`;
+
+            const contenido = document.createElement('span');
+            contenido.textContent = textoInicial;
+            elemento.appendChild(contenido);
+
+            const eliminarBtn = document.createElement('div');
+            eliminarBtn.className = `eliminar-${tipo}`;
+            eliminarBtn.textContent = '×';
+            eliminarBtn.onclick = (e) => {
+                e.stopPropagation();
+                const contenedor = elemento.parentElement;
+                const acordesDiv = contenedor.parentElement;
+                acordesDiv.removeChild(contenedor);
+                actualizarJSON();
+            };
+
+            elemento.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (tipo === 'acorde' && acordeSeleccionado) {
+                    acordeSeleccionado.classList.remove('seleccionado');
+                } else if (tipo === 'letra' && letraSeleccionada) {
+                    letraSeleccionada.classList.remove('seleccionado');
+                }
+
+                elemento.classList.add('seleccionado');
+                if (tipo === 'acorde') acordeSeleccionado = elemento;
+                else letraSeleccionada = elemento;
+
+                const input = document.createElement('input');
+                input.className = `${tipo}-input`;
+                input.value = contenido.textContent === '%' ? '' : contenido.textContent;
+
+                input.addEventListener('blur', function () {
+                    if (input.value.trim()) {
+                        contenido.textContent = input.value.trim();
+                        elemento.replaceChild(contenido, input);
+                        elemento.classList.remove('nuevo');
+                        elemento.classList.add('escrito');
+                        if (!elemento.contains(eliminarBtn)) {
+                            elemento.appendChild(eliminarBtn);
+                        }
+                    } else {
+                        contenido.textContent = tipo === 'acorde' ? '%' : '';
+                        elemento.replaceChild(contenido, input);
+                        elemento.classList.add('nuevo');
+                        elemento.classList.remove('escrito');
+                    }
+                    elemento.classList.remove('seleccionado');
+                    if (tipo === 'acorde') acordeSeleccionado = null;
+                    else letraSeleccionada = null;
+                    actualizarJSON();
+                });
+
+                input.addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                    }
+                });
+
+                if (elemento.contains(contenido)) {
+                    elemento.replaceChild(input, contenido);
+                } else {
+                    elemento.innerHTML = '';
+                    elemento.appendChild(input);
+                }
+                input.focus();
+            });
+
+            return elemento;
+        }
+
+        function dragStart(e) {
+            elementoArrastrado = this;
+            this.classList.add('arrastrando');
+            e.dataTransfer.setData('type', 'compas');
+        }
+
+        function dragEnd(e) {
+            this.classList.remove('arrastrando');
+            elementoArrastrado = null;
+            document.querySelectorAll('.drop-activo').forEach(el => el.classList.remove('drop-activo'));
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+            const compasDestino = this;
+            if (compasDestino !== elementoArrastrado) {
+                const rect = compasDestino.getBoundingClientRect();
+                const mitad = (rect.left + rect.right) / 2;
+                compasDestino.classList.remove('drop-izquierda', 'drop-derecha');
+                if (e.clientX < mitad) {
+                    compasDestino.classList.add('drop-izquierda');
+                } else {
+                    compasDestino.classList.add('drop-derecha');
+                }
+            }
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            const compasDestino = this;
+            if (elementoArrastrado && compasDestino !== elementoArrastrado) {
+                const rect = compasDestino.getBoundingClientRect();
+                const mitad = (rect.left + rect.right) / 2;
+
+                // Obtener los números de compás antes del movimiento
+                const numeroOrigen = elementoArrastrado.querySelector('.numero-compas').textContent;
+                const numeroDestino = compasDestino.querySelector('.numero-compas').textContent;
+
+                if (e.clientX < mitad) {
+                    compasDestino.parentNode.insertBefore(elementoArrastrado, compasDestino);
+                } else {
+                    compasDestino.parentNode.insertBefore(elementoArrastrado, compasDestino.nextSibling);
+                }
+
+                // Reordenar las imágenes
+                reordenarImagenes(numeroOrigen, numeroDestino, e.clientX < mitad);
+            }
+            compasDestino.classList.remove('drop-izquierda', 'drop-derecha');
+            actualizarNumerosCompases();
+        }
+
+        function actualizarNumerosCompases() {
+            const compases = document.querySelectorAll('.compas');
+            const imagenesScroll = document.getElementById('imagenes-scroll');
+            const contenedoresImagen = Array.from(imagenesScroll.querySelectorAll('.imagen-compas'));
+
+            compases.forEach((compas, index) => {
+                const nuevoNumero = index + 1;
+                const nombreCompasElement = compas.querySelector('.nombre-compas');
+                // Añadir verificación para evitar error si el elemento no existe
+                const nombreCompas = nombreCompasElement ? nombreCompasElement.textContent : 'Sin título';
+
+                // Actualizar número del compás
+                const numeroCompasElement = compas.querySelector('.numero-compas');
+                if (numeroCompasElement) {
+                    numeroCompasElement.textContent = nuevoNumero;
+                }
+
+                // Buscar el contenedor de imagen correspondiente al compás original
+                const contenedorImagenAntiguo = contenedoresImagen.find(cont =>
+                    compas.getAttribute('data-imagen-id') === cont.getAttribute('data-imagen-id')
+                );
+
+                if (contenedorImagenAntiguo) {
+                    // Actualizar el ID y el número mostrado
+                    contenedorImagenAntiguo.id = `imagen-compas-${nuevoNumero}`;
+                    const numeroLabel = contenedorImagenAntiguo.querySelector('.numero-compas');
+                    if (numeroLabel) {
+                        numeroLabel.innerHTML = `Compás ${nuevoNumero} - <span class="nombre-imagen">${nombreCompas}</span>`;
+                    }
+                }
+            });
+
+            contadorCompases = compases.length;
+            actualizarJSON();
+        }
+
+        function eliminarCompas() {
+            if (contadorCompases > 0) {
+                const partitura = document.getElementById('partitura');
+                partitura.removeChild(partitura.lastChild);
+
+                // Eliminar también el contenedor de imagen
+                const imagenesScroll = document.getElementById('imagenes-scroll');
+                const ultimaImagen = document.getElementById(`imagen-compas-${contadorCompases}`);
+                if (ultimaImagen) {
+                    imagenesScroll.removeChild(ultimaImagen);
+                }
+
+                contadorCompases--;
+                actualizarJSON();
+            }
+        }
+        function actualizarJSON() {
+            const partitura = document.getElementById('partitura');
+            const jsonOutput = document.getElementById('json-output');
+
+            if (!partitura || !jsonOutput) return; // Salir si los elementos base no existen
+
+            const partituraData = {
+                compases: []
+            };
+
+            partitura.querySelectorAll('.compas').forEach((compas, index) => {
+                const numeroCompas = index + 1;
+                const nombreCompasElement = compas.querySelector('.nombre-compas');
+                const nombreCompas = nombreCompasElement ? nombreCompasElement.textContent : 'Sin título';
+
+                // Verificar si hay imagen asociada
+                const contenedorImagen = document.getElementById(`imagen-compas-${numeroCompas}`);
+                const tieneImagen = contenedorImagen && contenedorImagen.querySelector('img') !== null;
+
+                const compasData = {
+                    numero: numeroCompas,
+                    nombre: nombreCompas,
+                    tieneImagen: tieneImagen,
+                    elementos: []
+                };
+
+                compas.querySelectorAll('.contenedor-acorde-letra').forEach(contenedor => {
+                    const acordeSpan = contenedor.querySelector('.acorde span');
+                    const letraSpan = contenedor.querySelector('.letra span');
+
+                    compasData.elementos.push({
+                        acorde: acordeSpan ? (acordeSpan.textContent === '%' ? '' : acordeSpan.textContent) : '',
+                        letra: letraSpan ? letraSpan.textContent : ''
+                    });
+                });
+
+                partituraData.compases.push(compasData);
+            });
+
+            jsonOutput.textContent = JSON.stringify(partituraData, null, 2);
+        }
+        // Inicializar el observer después de que el DOM esté completamente cargado
+        document.addEventListener('DOMContentLoaded', () => {
+            const observer = new MutationObserver(() => {
+                actualizarJSON();
+            });
+
+            observer.observe(document.getElementById('partitura'), {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true
+            });
+        });
+
+
+
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            const previewContainer = document.getElementById('images-preview');
+            previewContainer.innerHTML = '';
+
+            // Crear array para la información de las imágenes
+            const imagesInfo = [];
+
+            Array.from(files).forEach((file, index) => {
+                // Crear el preview de la imagen (tu código existente)
+                const reader = new FileReader();
+                const imageContainer = document.createElement('div');
+                imageContainer.className = 'image-container';
+
+                reader.onload = function (e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    imageContainer.appendChild(img);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'X';
+                    deleteButton.className = 'delete-button';
+                    deleteButton.onclick = function () {
+                        imageContainer.remove();
+                    };
+                    imageContainer.appendChild(deleteButton);
+                };
+
+                reader.readAsDataURL(file);
+                previewContainer.appendChild(imageContainer);
+
+                // Agregar la información de la imagen al array
+                imagesInfo.push({
+                    index: index,
+                    name: file.name,
+                    size: formatFileSize(file.size),
+                    type: file.type
+                });
+            });
+
+            // Mostrar la información en formato JSON
+            const imagesInfoElement = document.getElementById('images-info');
+            imagesInfoElement.textContent = JSON.stringify(imagesInfo, null, 2);
+        }
+
+        // Agregar esta función al final del archivo
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function reordenarImagenes(numeroOrigen, numeroDestino, antesDelDestino) {
+            const imagenesScroll = document.getElementById('imagenes-scroll');
+            const contenedorOrigen = document.getElementById(`imagen-compas-${numeroOrigen}`);
+            const contenedorDestino = document.getElementById(`imagen-compas-${numeroDestino}`);
+
+            if (contenedorOrigen && contenedorDestino) {
+                if (antesDelDestino) {
+                    imagenesScroll.insertBefore(contenedorOrigen, contenedorDestino);
+                } else {
+                    imagenesScroll.insertBefore(contenedorOrigen, contenedorDestino.nextSibling);
+                }
+            }
+        }
+
+
+
+        // Agregar esta nueva función
+        function seleccionarCompas(compas) {
+            // Deseleccionar el compás anterior si existe
+            if (compasSeleccionado) {
+                compasSeleccionado.classList.remove('seleccionado');
+                const imagenAnterior = document.querySelector(`[data-imagen-id="${compasSeleccionado.getAttribute('data-imagen-id')}"].imagen-compas`);
+                if (imagenAnterior) {
+                    imagenAnterior.classList.remove('seleccionado');
+                }
+            }
+
+            // Si hacemos click en el mismo compás, lo deseleccionamos
+            if (compasSeleccionado === compas) {
+                compasSeleccionado = null;
+                return;
+            }
+
+            // Seleccionar el nuevo compás
+            compasSeleccionado = compas;
+            compas.classList.add('seleccionado');
+
+            // Seleccionar la imagen vinculada
+            const imagenId = compas.getAttribute('data-imagen-id');
+            const imagenVinculada = document.querySelector(`[data-imagen-id="${imagenId}"].imagen-compas`);
+            if (imagenVinculada) {
+                imagenVinculada.classList.add('seleccionado');
+            }
+        }
+
+        // Agregar un evento click al body para deseleccionar cuando se haga click fuera
+        document.body.addEventListener('click', (e) => {
+            if (!e.target.closest('.compas') && !e.target.closest('.imagen-compas')) {
+                if (compasSeleccionado) {
+                    compasSeleccionado.classList.remove('seleccionado');
+                    const imagenVinculada = document.querySelector(`[data-imagen-id="${compasSeleccionado.getAttribute('data-imagen-id')}"].imagen-compas`);
+                    if (imagenVinculada) {
+                        imagenVinculada.classList.remove('seleccionado');
+                    }
+                    compasSeleccionado = null;
+                }
+            }
+        });
     </script>
 </body>
+
 </html>
