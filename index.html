@@ -370,7 +370,39 @@
             border: 2px solid #2196f3;
             box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
         }
+
+        #map {
+            height: 400px;
+            width: 100%;
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .map-container {
+            position: relative;
+            margin: 20px 0;
+        }
+
+        #ubicar-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 8px 16px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: none; /* Se mostrará cuando se seleccione un compás */
+        }
+
+        #ubicar-btn:hover {
+            background-color: #27ae60;
+        }
     </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 
 <body>
@@ -393,6 +425,10 @@
             </div>
             <div class="partitura" id="partitura">
             </div>
+            <div class="map-container">
+                <div id="map"></div>
+                <button id="ubicar-btn" style="display: none;">Ubicar</button>
+            </div>
             <div class="json-container">
                 <div id="json-output" class="json-output"></div>
             </div>
@@ -400,12 +436,76 @@
     </div>
 
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let contadorCompases = 0;
         let acordeSeleccionado = null;
         let letraSeleccionada = null;
         let elementoArrastrado = null;
         let compasSeleccionado = null;
+
+        let map, marker;
+        let currentCenter;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializar el mapa
+            map = L.map('map').setView([40.416775, -3.703790], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            const ubicarBtn = document.getElementById('ubicar-btn');
+            
+            map.on('move', () => {
+                currentCenter = map.getCenter();
+                if (marker) {
+                    marker.setLatLng(currentCenter);
+                }
+            });
+
+            ubicarBtn.addEventListener('click', () => {
+                console.log('🎯 Click en botón ubicar');
+                if (compasSeleccionado && currentCenter) {
+                    // Obtener las coordenadas actuales
+                    const lat = currentCenter.lat.toFixed(6);  // Redondear a 6 decimales
+                    const lng = currentCenter.lng.toFixed(6);
+
+                    console.log('📍 Coordenadas actuales:', {
+                        latitud: lat,
+                        longitud: lng
+                    });
+                    
+                    // Guardar las coordenadas en el compás
+                    compasSeleccionado.setAttribute('data-lat', lat);
+                    compasSeleccionado.setAttribute('data-lng', lng);
+                    
+                    // Mostrar las coordenadas guardadas
+                    console.log('💾 Coordenadas guardadas en el compás:', {
+                        latitud: compasSeleccionado.getAttribute('data-lat'),
+                        longitud: compasSeleccionado.getAttribute('data-lng')
+                    });
+
+                    // Actualizar el JSON y mostrar confirmación
+                    actualizarJSON();
+                    console.log('✅ JSON actualizado con las nuevas coordenadas');
+                } else {
+                    console.warn('⚠️ No hay compás seleccionado o coordenadas no disponibles');
+                }
+            });
+
+            // Configurar el observer aquí
+            const observer = new MutationObserver(() => {
+                actualizarJSON();
+            });
+
+            observer.observe(document.getElementById('partitura'), {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true
+            });
+        });
 
         function agregarCompas() {
             contadorCompases++;
@@ -877,8 +977,9 @@
                 const numeroCompas = index + 1;
                 const nombreCompasElement = compas.querySelector('.nombre-compas');
                 const nombreCompas = nombreCompasElement ? nombreCompasElement.textContent : 'Sin título';
+                const lat = compas.getAttribute('data-lat');
+                const lng = compas.getAttribute('data-lng');
 
-                // Verificar si hay imagen asociada
                 const contenedorImagen = document.getElementById(`imagen-compas-${numeroCompas}`);
                 const tieneImagen = contenedorImagen && contenedorImagen.querySelector('img') !== null;
 
@@ -886,7 +987,8 @@
                     numero: numeroCompas,
                     nombre: nombreCompas,
                     tieneImagen: tieneImagen,
-                    elementos: []
+                    elementos: [],
+                    ubicacion: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null
                 };
 
                 compas.querySelectorAll('.contenedor-acorde-letra').forEach(contenedor => {
@@ -904,21 +1006,6 @@
 
             jsonOutput.textContent = JSON.stringify(partituraData, null, 2);
         }
-        // Inicializar el observer después de que el DOM esté completamente cargado
-        document.addEventListener('DOMContentLoaded', () => {
-            const observer = new MutationObserver(() => {
-                actualizarJSON();
-            });
-
-            observer.observe(document.getElementById('partitura'), {
-                childList: true,
-                subtree: true,
-                characterData: true,
-                attributes: true
-            });
-        });
-
-
 
         function handleFileSelect(event) {
             const files = event.target.files;
@@ -992,8 +1079,17 @@
 
         // Agregar esta nueva función
         function seleccionarCompas(compas) {
+            console.log('Seleccionando compás:', compas);
+            const ubicarBtn = document.getElementById('ubicar-btn');
+            
+            if (!ubicarBtn) {
+                console.error('No se encontró el botón ubicar');
+                return;
+            }
+
             // Deseleccionar el compás anterior si existe
             if (compasSeleccionado) {
+                console.log('Deseleccionando compás anterior');
                 compasSeleccionado.classList.remove('seleccionado');
                 const imagenAnterior = document.querySelector(`[data-imagen-id="${compasSeleccionado.getAttribute('data-imagen-id')}"].imagen-compas`);
                 if (imagenAnterior) {
@@ -1001,15 +1097,22 @@
                 }
             }
 
-            // Si hacemos click en el mismo compás, lo deseleccionamos
-            if (compasSeleccionado === compas) {
-                compasSeleccionado = null;
-                return;
-            }
-
             // Seleccionar el nuevo compás
             compasSeleccionado = compas;
             compas.classList.add('seleccionado');
+            console.log('Nuevo compás seleccionado:', compasSeleccionado);
+
+            // Mostrar el botón ubicar
+            ubicarBtn.style.display = 'block';
+
+            // Actualizar el marcador en el mapa
+            currentCenter = map.getCenter();
+            console.log('Centro actual del mapa:', currentCenter);
+
+            if (marker) {
+                map.removeLayer(marker);
+            }
+            marker = L.marker(currentCenter).addTo(map);
 
             // Seleccionar la imagen vinculada
             const imagenId = compas.getAttribute('data-imagen-id');
@@ -1017,18 +1120,25 @@
             if (imagenVinculada) {
                 imagenVinculada.classList.add('seleccionado');
             }
+
+            // Si el compás ya tiene coordenadas guardadas, centrar el mapa en ellas
+            const lat = compas.getAttribute('data-lat');
+            const lng = compas.getAttribute('data-lng');
+            if (lat && lng) {
+                console.log('Coordenadas existentes encontradas:', { lat, lng });
+                map.setView([lat, lng], map.getZoom());
+                marker.setLatLng([lat, lng]);
+            }
         }
 
         // Agregar un evento click al body para deseleccionar cuando se haga click fuera
         document.body.addEventListener('click', (e) => {
-            if (!e.target.closest('.compas') && !e.target.closest('.imagen-compas')) {
-                if (compasSeleccionado) {
-                    compasSeleccionado.classList.remove('seleccionado');
-                    const imagenVinculada = document.querySelector(`[data-imagen-id="${compasSeleccionado.getAttribute('data-imagen-id')}"].imagen-compas`);
-                    if (imagenVinculada) {
-                        imagenVinculada.classList.remove('seleccionado');
-                    }
-                    compasSeleccionado = null;
+            // Solo deseleccionamos si hacemos click en otro compás
+            const clickedCompas = e.target.closest('.compas');
+            if (clickedCompas) {
+                // Si hacemos click en un compás diferente al seleccionado
+                if (clickedCompas !== compasSeleccionado) {
+                    seleccionarCompas(clickedCompas);
                 }
             }
         });
