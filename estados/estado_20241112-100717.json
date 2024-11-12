@@ -1,0 +1,18 @@
+{
+  "compases": [
+    {
+      "numero": 1,
+      "nombre": "Sin t\u00edtulo",
+      "imagen": null,
+      "lat": "40.413366",
+      "lng": "-3.688399"
+    },
+    {
+      "numero": 2,
+      "nombre": "Sin t\u00edtulo",
+      "imagen": null,
+      "lat": null,
+      "lng": null
+    }
+  ]
+}
