@@ -425,6 +425,32 @@
             overflow-y: auto;
             font-size: 14px;
         }
+
+        .imagen-upload-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .url-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .url-input {
+            width: 200px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .url-submit {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
@@ -479,13 +505,26 @@
         let compasSeleccionado = null;
         let compasesSeleccionados = new Set();
 
-        let map, marker;
+        let map, markers = new Map();
         let currentCenter;
 
         // Agregar estas variables globales
         let ultimoEstadoJSON = '';
         let timerAutoguardado = null;
         let cambiosPendientes = false;
+
+        // Agregar variable global para el marcador temporal
+        let tempMarker = null;
+
+        // Crear un icono rojo personalizado
+        const redIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
 
         // Función para comparar si hay cambios
         function hayCambios() {
@@ -520,21 +559,27 @@
 
         // Función de autoguardado
         async function autoguardar() {
-            if (!cambiosPendientes || !hayCambios()) {
+            if (!cambiosPendientes || !hayCambios() || guardandoCambios) {
                 return;
             }
 
-            const estado = generarJSONEstado();
-            ultimoEstadoJSON = estado;
-            cambiosPendientes = false;
-            
-            // Actualizar la visualización del JSON
-            const jsonOutput = document.getElementById('json-output');
-            if (jsonOutput) {
-                jsonOutput.textContent = JSON.stringify(JSON.parse(estado), null, 2);
+            try {
+                guardandoCambios = true;
+                const estado = generarJSONEstado();
+                ultimoEstadoJSON = estado;
+                cambiosPendientes = false;
+                
+                const jsonOutput = document.getElementById('json-output');
+                if (jsonOutput) {
+                    jsonOutput.textContent = JSON.stringify(JSON.parse(estado), null, 2);
+                }
+                
+                console.log('✅ Autoguardado completado:', new Date().toLocaleTimeString());
+            } catch (error) {
+                console.error('Error durante el autoguardado:', error);
+            } finally {
+                guardandoCambios = false;
             }
-            
-            console.log('✅ Autoguardado completado:', new Date().toLocaleTimeString());
         }
 
         // Función para iniciar el sistema de autoguardado
@@ -543,9 +588,13 @@
             ultimoEstadoJSON = generarJSONEstado();
             
             // Configurar el timer de autoguardado
-            timerAutoguardado = setInterval(() => {
-                autoguardar();
-            }, 2000); // Cada 2 segundos
+            timerAutoguardado = setInterval(async () => {
+                try {
+                    await autoguardar();
+                } catch (error) {
+                    console.error('Error en el ciclo de autoguardado:', error);
+                }
+            }, 2000);
 
             // Agregar listener para cambios en la partitura
             const partitura = document.getElementById('partitura');
@@ -573,16 +622,22 @@
             
             map.on('move', () => {
                 currentCenter = map.getCenter();
-                if (marker) {
-                    marker.setLatLng(currentCenter);
+                // Si hay un compás seleccionado y estamos en modo ubicación
+                if (compasesSeleccionados.size === 1) {
+                    // Si no existe el marcador temporal, créalo
+                    if (!tempMarker) {
+                        tempMarker = L.marker(currentCenter, {icon: redIcon}).addTo(map);
+                    } else {
+                        // Si ya existe, actualiza su posición
+                        tempMarker.setLatLng(currentCenter);
+                    }
                 }
             });
 
             ubicarBtn.addEventListener('click', () => {
-                console.log('🎯 Click en botón ubicar');
+                console.log(' Click en botón ubicar');
                 if (compasSeleccionado && currentCenter) {
-                    // Obtener las coordenadas actuales
-                    const lat = currentCenter.lat.toFixed(6);  // Redondear a 6 decimales
+                    const lat = currentCenter.lat.toFixed(6);
                     const lng = currentCenter.lng.toFixed(6);
 
                     console.log('📍 Coordenadas actuales:', {
@@ -590,17 +645,26 @@
                         longitud: lng
                     });
                     
-                    // Guardar las coordenadas en el compás
                     compasSeleccionado.setAttribute('data-lat', lat);
                     compasSeleccionado.setAttribute('data-lng', lng);
                     
-                    // Mostrar las coordenadas guardadas
-                    console.log('💾 Coordenadas guardadas en el compás:', {
-                        latitud: compasSeleccionado.getAttribute('data-lat'),
-                        longitud: compasSeleccionado.getAttribute('data-lng')
-                    });
+                    // Eliminar el marcador temporal si existe
+                    if (tempMarker) {
+                        map.removeLayer(tempMarker);
+                        tempMarker = null;
+                    }
 
-                    // Actualizar el JSON y mostrar confirmación
+                    // Actualizar o crear el marcador permanente (azul)
+                    const markerId = compasSeleccionado.getAttribute('data-marker-id');
+                    if (markerId) {
+                        if (markers.has(markerId)) {
+                            markers.get(markerId).setLatLng([lat, lng]);
+                        } else {
+                            const newMarker = L.marker([lat, lng]).addTo(map);
+                            markers.set(markerId, newMarker);
+                        }
+                    }
+
                     actualizarJSON();
                     console.log('✅ JSON actualizado con las nuevas coordenadas');
                 } else {
@@ -768,57 +832,12 @@
             numeroLabel.className = 'numero-compas';
             numeroLabel.innerHTML = `<span class="indice-imagen">${nombreImagen}</span>`;
 
-            const uploadDiv = document.createElement('div');
-            uploadDiv.className = 'imagen-upload';
-            uploadDiv.textContent = 'Haga clic o arrastre una imagen aquí';
-
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.jpg,.jpeg,.svg';
-            input.style.display = 'none';
-
-            uploadDiv.onclick = (e) => {
-                e.preventDefault();
-                input.click();
-            };
-
-            input.onchange = function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    
-                    // Asignar la imagen a todos los compases seleccionados
-                    compasesSeleccionados.forEach(compas => {
-                        // Obtener o crear el array de imágenes
-                        let imagenes = compas.getAttribute('data-imagenes');
-                        imagenes = imagenes ? JSON.parse(imagenes) : [];
-                        
-                        // Agregar la nueva imagen
-                        imagenes.push({
-                            id: imagenId,
-                            nombre: nombreImagen
-                        });
-                        
-                        // Guardar el array actualizado
-                        compas.setAttribute('data-imagenes', JSON.stringify(imagenes));
-                    });
-
-                    if (uploadDiv.parentNode) {
-                        contenedor.replaceChild(img, uploadDiv);
-                    }
-                    
-                    actualizarJSON();
-                }
-            };
-
             const eliminarBtn = document.createElement('div');
             eliminarBtn.className = 'eliminar-imagen';
             eliminarBtn.textContent = '×';
             eliminarBtn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Eliminar la referencia de la imagen en todos los compases que la usan
                 document.querySelectorAll('.compas').forEach(compas => {
                     let imagenes = compas.getAttribute('data-imagenes');
                     if (imagenes) {
@@ -831,13 +850,214 @@
                 actualizarJSON();
             };
 
+            const uploadOptions = crearOpcionesDeImagen(contenedor);
+            
             contenedor.appendChild(numeroLabel);
-            contenedor.appendChild(uploadDiv);
-            contenedor.appendChild(input);
+            contenedor.appendChild(uploadOptions);
             contenedor.appendChild(eliminarBtn);
             
             imagenesScroll.appendChild(contenedor);
             return contenedor;
+        }
+
+        // Función auxiliar para crear las opciones de imagen
+        function crearOpcionesDeImagen(contenedor) {
+            const uploadOptions = document.createElement('div');
+            uploadOptions.className = 'imagen-upload-options';
+            
+            // Opción para archivo local
+            const uploadDiv = document.createElement('div');
+            uploadDiv.className = 'imagen-upload';
+            uploadDiv.textContent = 'Haga clic o arrastre una imagen aquí';
+
+            // Opción para URL con id y name únicos
+            const urlInput = document.createElement('div');
+            urlInput.className = 'url-input-container';
+            const inputId = `url-input-${Date.now()}`; // ID único
+            urlInput.innerHTML = `
+                <input 
+                    type="text" 
+                    placeholder="O pegue una URL de imagen" 
+                    class="url-input"
+                    id="${inputId}"
+                    name="image-url"
+                    autocomplete="off"
+                >
+                <div class="url-status"></div>
+            `;
+
+            // Input de archivo con id y name únicos
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.jpg,.jpeg,.png,.svg';
+            input.style.display = 'none';
+            input.id = `file-input-${Date.now()}`; // ID único
+            input.name = 'image-file';
+
+            // Obtener referencias a los elementos
+            const urlInputField = urlInput.querySelector('.url-input');
+            const urlStatus = urlInput.querySelector('.url-status');
+
+            // Función mejorada para validar URLs
+            function validarImagenUrl(url) {
+                return new Promise((resolve, reject) => {
+                    // Verificar si la URL tiene un formato válido
+                    try {
+                        new URL(url);
+                    } catch (e) {
+                        reject(new Error('URL inválida'));
+                        return;
+                    }
+
+                    // Verificar si la URL termina en una extensión de imagen común
+                    const extensionesValidas = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+                    const urlLowerCase = url.toLowerCase();
+                    const esExtensionValida = extensionesValidas.some(ext => urlLowerCase.endsWith(ext));
+                    
+                    if (!esExtensionValida) {
+                        reject(new Error('La URL no parece ser una imagen'));
+                        return;
+                    }
+
+                    // Intentar cargar la imagen
+                    const img = new Image();
+                    img.onload = () => resolve(url);
+                    img.onerror = () => reject(new Error('No se pudo cargar la imagen'));
+                    img.src = url;
+                });
+            }
+
+            // Función mejorada para verificar la URL
+            const verificarUrl = async (url, urlStatus) => {
+                if (!url.trim()) {
+                    urlStatus.textContent = '';
+                    urlStatus.className = 'url-status';
+                    return;
+                }
+
+                urlStatus.textContent = 'Verificando...';
+                urlStatus.className = 'url-status verificando';
+
+                try {
+                    await validarImagenUrl(url);
+                    urlStatus.textContent = '✓ URL válida';
+                    urlStatus.className = 'url-status valida';
+                    return true;
+                } catch (error) {
+                    urlStatus.textContent = `✗ ${error.message}`;
+                    urlStatus.className = 'url-status invalida';
+                    return false;
+                }
+            };
+
+            // Manejar el pegado de URL
+            urlInputField.addEventListener('paste', (e) => {
+                setTimeout(async () => {
+                    const url = urlInputField.value.trim();
+                    if (url) {
+                        const esValida = await verificarUrl(url, urlStatus);
+                        if (esValida) {
+                            try {
+                                cargarImagen(url, contenedor, uploadOptions);
+                            } catch (error) {
+                                console.error('Error al cargar la imagen:', error);
+                                urlStatus.textContent = '✗ Error al cargar la imagen';
+                                urlStatus.className = 'url-status invalida';
+                            }
+                        }
+                    }
+                }, 100);
+            });
+
+            // Manejar cuando el usuario sale del input
+            urlInputField.addEventListener('blur', async () => {
+                const url = urlInputField.value.trim();
+                if (url) {
+                    const esValida = await verificarUrl(url, urlStatus);
+                    if (esValida) {
+                        try {
+                            cargarImagen(url, contenedor, uploadOptions);
+                        } catch (error) {
+                            console.error('Error al cargar la imagen:', error);
+                            urlStatus.textContent = '✗ Error al cargar la imagen';
+                            urlStatus.className = 'url-status invalida';
+                        }
+                    }
+                }
+            });
+
+            // Manejar la carga de archivo local
+            uploadDiv.onclick = (e) => {
+                e.preventDefault();
+                input.click();
+            };
+
+            input.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const dataUrl = await handleImageUpload(file);
+                        cargarImagen(dataUrl, contenedor, uploadOptions);
+                    } catch (error) {
+                        console.error('Error al cargar la imagen:', error);
+                        alert('Error al cargar la imagen');
+                    }
+                }
+            };
+
+            uploadOptions.appendChild(uploadDiv);
+            uploadOptions.appendChild(urlInput);
+            uploadOptions.appendChild(input);
+            
+            return uploadOptions;
+        }
+
+        // Función auxiliar para cargar la imagen
+        function cargarImagen(src, contenedor, elementoAReemplazar) {
+            const img = document.createElement('img');
+            img.src = src;
+            img.style.width = '100%';  // Asegurar que la imagen se ajuste al contenedor
+            img.style.height = 'auto';
+            img.style.display = 'block';
+            
+            // Asignar la imagen a todos los compases seleccionados
+            compasesSeleccionados.forEach(compas => {
+                let imagenes = compas.getAttribute('data-imagenes');
+                imagenes = imagenes ? JSON.parse(imagenes) : [];
+                
+                imagenes.push({
+                    id: contenedor.getAttribute('data-imagen-id'),
+                    nombre: contenedor.getAttribute('data-imagen-nombre'),
+                    url: src  // Guardar la URL de la imagen
+                });
+                
+                compas.setAttribute('data-imagenes', JSON.stringify(imagenes));
+            });
+
+            // Limpiar el contenedor y agregar la imagen
+            if (elementoAReemplazar.parentNode) {
+                // Eliminar las opciones de carga
+                contenedor.removeChild(elementoAReemplazar);
+                
+                // Agregar la imagen
+                contenedor.appendChild(img);
+                
+                // Agregar botón para cambiar la imagen
+                const cambiarImagenBtn = document.createElement('button');
+                cambiarImagenBtn.className = 'cambiar-imagen-btn';
+                cambiarImagenBtn.textContent = 'Cambiar imagen';
+                cambiarImagenBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    // Recrear las opciones de carga
+                    const nuevasOpciones = crearOpcionesDeImagen(contenedor);
+                    contenedor.removeChild(img);
+                    contenedor.removeChild(cambiarImagenBtn);
+                    contenedor.appendChild(nuevasOpciones);
+                };
+                contenedor.appendChild(cambiarImagenBtn);
+            }
+            
+            actualizarJSON();
         }
 
         function agregarAcordeYLetra(acordesDiv) {
@@ -943,13 +1163,37 @@
         }
 
         function dragStart(e) {
-            elementoArrastrado = this;
-            this.classList.add('arrastrando');
+            // Asegurarse de que elementoArrastrado siempre sea un array
+            if (!this.classList.contains('seleccionado')) {
+                elementoArrastrado = [this];
+            } else {
+                // Obtener todos los compases seleccionados en su orden actual en el DOM
+                const todosLosCompases = Array.from(this.parentNode.children);
+                elementoArrastrado = Array.from(compasesSeleccionados)
+                    .sort((a, b) => {
+                        return todosLosCompases.indexOf(a) - todosLosCompases.indexOf(b);
+                    });
+            }
+            
+            elementoArrastrado.forEach(compas => {
+                compas.classList.add('arrastrando');
+            });
+            
             e.dataTransfer.setData('type', 'compas');
         }
 
         function dragEnd(e) {
-            this.classList.remove('arrastrando');
+            // Verificar que elementoArrastrado existe y es un array
+            if (elementoArrastrado && Array.isArray(elementoArrastrado)) {
+                // Remover clase de arrastre de todos los elementos
+                elementoArrastrado.forEach(compas => {
+                    compas.classList.remove('arrastrando');
+                });
+            } else if (elementoArrastrado) {
+                // Si elementoArrastrado es un único elemento
+                elementoArrastrado.classList.remove('arrastrando');
+            }
+            
             elementoArrastrado = null;
             document.querySelectorAll('.drop-activo').forEach(el => el.classList.remove('drop-activo'));
         }
@@ -957,9 +1201,13 @@
         function dragOver(e) {
             e.preventDefault();
             const compasDestino = this;
-            if (compasDestino !== elementoArrastrado) {
+            
+            // Verificar que elementoArrastrado es un array y existe
+            if (elementoArrastrado && Array.isArray(elementoArrastrado) && 
+                !elementoArrastrado.includes(compasDestino)) {
                 const rect = compasDestino.getBoundingClientRect();
                 const mitad = (rect.left + rect.right) / 2;
+                
                 compasDestino.classList.remove('drop-izquierda', 'drop-derecha');
                 if (e.clientX < mitad) {
                     compasDestino.classList.add('drop-izquierda');
@@ -972,23 +1220,50 @@
         function drop(e) {
             e.preventDefault();
             const compasDestino = this;
-            if (elementoArrastrado && compasDestino !== elementoArrastrado) {
+            
+            // Verificar que elementoArrastrado es un array y existe
+            if (elementoArrastrado && Array.isArray(elementoArrastrado) && 
+                !elementoArrastrado.includes(compasDestino)) {
                 const rect = compasDestino.getBoundingClientRect();
                 const mitad = (rect.left + rect.right) / 2;
-
-                // Obtener los números de compás antes del movimiento
-                const numeroOrigen = elementoArrastrado.querySelector('.numero-compas').textContent;
-                const numeroDestino = compasDestino.querySelector('.numero-compas').textContent;
-
-                if (e.clientX < mitad) {
-                    compasDestino.parentNode.insertBefore(elementoArrastrado, compasDestino);
+                const insertarAntes = e.clientX < mitad;
+                
+                // Encontrar el primer y último compás del bloque seleccionado
+                const primerCompas = elementoArrastrado[0];
+                
+                // Insertar todo el bloque en la nueva posición
+                if (insertarAntes) {
+                    elementoArrastrado.forEach(compas => {
+                        compasDestino.parentNode.insertBefore(compas, compasDestino);
+                    });
                 } else {
-                    compasDestino.parentNode.insertBefore(elementoArrastrado, compasDestino.nextSibling);
+                    // Para insertar después, insertamos en orden inverso después del destino
+                    elementoArrastrado.reverse().forEach(compas => {
+                        compasDestino.parentNode.insertBefore(compas, compasDestino.nextSibling);
+                    });
                 }
-
-                // Reordenar las imágenes
-                reordenarImagenes(numeroOrigen, numeroDestino, e.clientX < mitad);
+                
+                // Mover las imágenes asociadas manteniendo el mismo orden
+                const imagenesScroll = document.getElementById('imagenes-scroll');
+                const imagenDestino = document.querySelector(`[data-imagen-id="${compasDestino.getAttribute('data-imagen-id')}"]`);
+                
+                if (imagenDestino) {
+                    const imagenesAMover = elementoArrastrado.map(compas => {
+                        return document.querySelector(`[data-imagen-id="${compas.getAttribute('data-imagen-id')}"]`);
+                    }).filter(img => img); // Filtrar nulls
+                    
+                    if (insertarAntes) {
+                        imagenesAMover.forEach(imagen => {
+                            imagenesScroll.insertBefore(imagen, imagenDestino);
+                        });
+                    } else {
+                        imagenesAMover.reverse().forEach(imagen => {
+                            imagenesScroll.insertBefore(imagen, imagenDestino.nextSibling);
+                        });
+                    }
+                }
             }
+            
             compasDestino.classList.remove('drop-izquierda', 'drop-derecha');
             actualizarNumerosCompases();
         }
@@ -1232,16 +1507,32 @@
         function seleccionarCompas(compas) {
             const ubicarBtn = document.getElementById('ubicar-btn');
             
+            // Si había un marcador temporal, eliminarlo
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                tempMarker = null;
+            }
+
+            // Actualizar la variable global compasSeleccionado
+            compasSeleccionado = compas;
+            
             if (compasesSeleccionados.has(compas)) {
-                // Deseleccionar si ya estaba seleccionado
+                // Si ya está seleccionado, lo deseleccionamos
                 compasesSeleccionados.delete(compas);
                 compas.classList.remove('seleccionado');
                 const imagenVinculada = document.querySelector(`[data-imagen-id="${compas.getAttribute('data-imagen-id')}"].imagen-compas`);
                 if (imagenVinculada) {
                     imagenVinculada.classList.remove('seleccionado');
                 }
+                
+                // Eliminar el marcador correspondiente
+                const markerId = compas.getAttribute('data-marker-id');
+                if (markerId && markers.has(markerId)) {
+                    map.removeLayer(markers.get(markerId));
+                    markers.delete(markerId);
+                }
             } else {
-                // Seleccionar el compás
+                // Si no está seleccionado, lo añadimos a la selección
                 compasesSeleccionados.add(compas);
                 compas.classList.add('seleccionado');
                 const imagenVinculada = document.querySelector(`[data-imagen-id="${compas.getAttribute('data-imagen-id')}"].imagen-compas`);
@@ -1250,28 +1541,73 @@
                 }
             }
 
-            // Actualizar el estado del botón ubicar y el mapa
+            // Actualizar marcadores y vista del mapa
             if (compasesSeleccionados.size > 0) {
                 ubicarBtn.style.display = 'block';
-                
-                // Si solo hay un compás seleccionado, mostrar sus coordenadas en el mapa
-                if (compasesSeleccionados.size === 1) {
-                    const compasSeleccionado = Array.from(compasesSeleccionados)[0];
-                    const lat = compasSeleccionado.getAttribute('data-lat');
-                    const lng = compasSeleccionado.getAttribute('data-lng');
-                    if (lat && lng) {
-                        map.setView([lat, lng], map.getZoom());
-                        if (marker) map.removeLayer(marker);
-                        marker = L.marker([lat, lng]).addTo(map);
-                    }
-                }
+                actualizarMarcadoresYVista();
             } else {
                 ubicarBtn.style.display = 'none';
-                if (marker) map.removeLayer(marker);
+                // Limpiar todos los marcadores
+                markers.forEach(marker => map.removeLayer(marker));
+                markers.clear();
+            }
+            
+            actualizarJSONSeleccionados();
+        }
+
+        // Modificar actualizarMarcadoresYVista para manejar el marcador temporal
+        function actualizarMarcadoresYVista() {
+            // Si había un marcador temporal, eliminarlo
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                tempMarker = null;
+            }
+
+            const bounds = L.latLngBounds();
+            let hayMarcadores = false;
+
+            // Limpiar marcadores existentes
+            markers.forEach(marker => map.removeLayer(marker));
+            markers.clear();
+
+            // Crear marcadores para cada compás seleccionado
+            compasesSeleccionados.forEach(compas => {
+                const lat = compas.getAttribute('data-lat');
+                const lng = compas.getAttribute('data-lng');
+                
+                if (lat && lng) {
+                    const latLng = [parseFloat(lat), parseFloat(lng)];
+                    const markerId = `marker-${compas.getAttribute('data-marker-id') || Date.now()}`;
+                    compas.setAttribute('data-marker-id', markerId);
+                    
+                    // Crear marcador con popup mostrando el nombre del compás
+                    const marker = L.marker(latLng).bindPopup(
+                        `Compás ${compas.querySelector('.numero-compas').textContent} - ${compas.querySelector('.nombre-compas').textContent}`
+                    );
+                    markers.set(markerId, marker);
+                    marker.addTo(map);
+                    
+                    bounds.extend(latLng);
+                    hayMarcadores = true;
+                }
+            });
+
+            // Ajustar la vista del mapa
+            if (hayMarcadores) {
+                map.fitBounds(bounds, {
+                    padding: [50, 50], // Añadir padding para mejor visualización
+                    maxZoom: 15 // Limitar el zoom máximo
+                });
+            } else {
+                // Si no hay marcadores con coordenadas, mantener la vista actual
+                const center = map.getCenter();
+                const marker = L.marker(center);
+                markers.set('temp', marker);
+                marker.addTo(map);
             }
         }
 
-        // Modificar el event listener del body
+        // Simplificar el event listener
         document.body.addEventListener('click', (e) => {
             const clickedCompas = e.target.closest('.compas');
             if (clickedCompas) {
@@ -1281,11 +1617,35 @@
         });
 
         // Agregar manejador para cuando la página se cierre
+        let guardandoCambios = false;
+
         window.addEventListener('beforeunload', (e) => {
-            if (cambiosPendientes) {
-                // Mostrar mensaje de confirmación
+            if (cambiosPendientes && !guardandoCambios) {
+                // Mostrar diálogo de confirmación
                 e.preventDefault();
                 e.returnValue = ''; // Requerido para algunos navegadores
+                
+                // Intentar guardar los cambios de forma síncrona
+                try {
+                    guardandoCambios = true;
+                    const estado = generarJSONEstado();
+                    ultimoEstadoJSON = estado;
+                    cambiosPendientes = false;
+                    
+                    // Actualizar la visualización del JSON
+                    const jsonOutput = document.getElementById('json-output');
+                    if (jsonOutput) {
+                        jsonOutput.textContent = JSON.stringify(JSON.parse(estado), null, 2);
+                    }
+                    
+                    console.log('✅ Guardado final completado:', new Date().toLocaleTimeString());
+                } catch (error) {
+                    console.error('Error durante el guardado final:', error);
+                } finally {
+                    guardandoCambios = false;
+                }
+                
+                return e.returnValue;
             }
         });
 
@@ -1304,6 +1664,159 @@
                 
                 reader.readAsDataURL(file);
             });
+        }
+
+        // Agregar estas funciones para manejar cookies de forma segura
+        function setCookie(name, value, options = {}) {
+            options = {
+                path: '/',
+                // Agregar opciones de seguridad por defecto
+                SameSite: 'Strict',
+                Secure: window.location.protocol === 'https:',
+                ...options
+            };
+
+            let cookieString = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+
+            for (let optionKey in options) {
+                const optionValue = options[optionKey];
+                cookieString += `; ${optionKey}`;
+                
+                if (optionValue !== true) {
+                    cookieString += `=${optionValue}`;
+                }
+            }
+
+            document.cookie = cookieString;
+        }
+
+        function getCookie(name) {
+            const matches = document.cookie.match(new RegExp(
+                "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+            ));
+            return matches ? decodeURIComponent(matches[1]) : undefined;
+        }
+
+        // Función para guardar el estado en cookies
+        function guardarEstadoEnCookies() {
+            if (guardandoCambios) return;
+            
+            try {
+                guardandoCambios = true;
+                const estado = generarJSONEstado();
+                
+                // Dividir el estado en chunks si es muy grande
+                const maxLength = 4000; // Tamaño máximo recomendado para una cookie
+                const chunks = Math.ceil(estado.length / maxLength);
+                
+                // Guardar el número de chunks
+                setCookie('estado_chunks', chunks, {
+                    maxAge: 86400, // 24 horas
+                    SameSite: 'Strict',
+                    Secure: window.location.protocol === 'https:'
+                });
+                
+                // Guardar cada chunk
+                for (let i = 0; i < chunks; i++) {
+                    const chunk = estado.substr(i * maxLength, maxLength);
+                    setCookie(`estado_${i}`, chunk, {
+                        maxAge: 86400,
+                        SameSite: 'Strict',
+                        Secure: window.location.protocol === 'https:'
+                    });
+                }
+                
+                console.log('✅ Estado guardado en cookies:', new Date().toLocaleTimeString());
+            } catch (error) {
+                console.error('Error al guardar en cookies:', error);
+            } finally {
+                guardandoCambios = false;
+            }
+        }
+
+        // Función para cargar el estado desde cookies
+        function cargarEstadoDesdeCookies() {
+            try {
+                const chunks = parseInt(getCookie('estado_chunks')) || 0;
+                if (chunks === 0) return null;
+                
+                let estado = '';
+                for (let i = 0; i < chunks; i++) {
+                    const chunk = getCookie(`estado_${i}`);
+                    if (chunk) {
+                        estado += chunk;
+                    }
+                }
+                
+                return estado ? JSON.parse(estado) : null;
+            } catch (error) {
+                console.error('Error al cargar desde cookies:', error);
+                return null;
+            }
+        }
+
+        // Modificar el inicializador para usar las cookies
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... código existente ...
+
+            // Intentar cargar el estado guardado
+            const estadoGuardado = cargarEstadoDesdeCookies();
+            if (estadoGuardado) {
+                try {
+                    // Aquí implementar la lógica para restaurar el estado
+                    restaurarEstado(estadoGuardado);
+                    console.log('✅ Estado restaurado desde cookies');
+                } catch (error) {
+                    console.error('Error al restaurar el estado:', error);
+                }
+            }
+
+            // Configurar el autoguardado
+            setInterval(() => {
+                if (cambiosPendientes) {
+                    guardarEstadoEnCookies();
+                }
+            }, 30000); // Guardar cada 30 segundos si hay cambios
+        });
+
+        // Función para restaurar el estado
+        function restaurarEstado(estado) {
+            if (!estado || !estado.compases) return;
+            
+            // Limpiar el estado actual
+            const partitura = document.getElementById('partitura');
+            partitura.innerHTML = '';
+            
+            // Restaurar cada compás
+            estado.compases.forEach(compasData => {
+                const compas = agregarCompas();
+                
+                // Restaurar nombre
+                if (compasData.nombre) {
+                    const nombreCompas = compas.querySelector('.nombre-compas');
+                    if (nombreCompas) {
+                        nombreCompas.textContent = compasData.nombre;
+                    }
+                }
+                
+                // Restaurar ubicación
+                if (compasData.ubicacion) {
+                    compas.setAttribute('data-lat', compasData.ubicacion.lat);
+                    compas.setAttribute('data-lng', compasData.ubicacion.lng);
+                }
+                
+                // Restaurar elementos
+                if (compasData.elementos && compasData.elementos.length > 0) {
+                    const acordesDiv = compas.querySelector('.acordes');
+                    acordesDiv.innerHTML = ''; // Limpiar elementos por defecto
+                    
+                    compasData.elementos.forEach(elemento => {
+                        agregarAcordeYLetra(acordesDiv, elemento.acorde, elemento.letra);
+                    });
+                }
+            });
+            
+            actualizarNumerosCompases();
         }
     </script>
 </body>
