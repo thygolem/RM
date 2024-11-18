@@ -451,6 +451,61 @@
             border-radius: 4px;
             cursor: pointer;
         }
+
+        .toggle-json-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 15px;
+            margin: 0 10px;
+        }
+
+        .toggle-json-btn:hover {
+            background-color: #45a049;
+        }
+
+        .json-container {
+            display: none;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+
+        .clear-all-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .clear-all-btn:hover {
+            opacity: 1;
+        }
+
+        /* Agregar estos estilos para la animación de parpadeo */
+        @keyframes parpadeo {
+            0% { background-color: rgba(52, 152, 219, 0.1); }
+            50% { background-color: rgba(52, 152, 219, 0.3); }
+            100% { background-color: rgba(52, 152, 219, 0.1); }
+        }
+
+        .imagen-upload.parpadeando {
+            animation: parpadeo 1.5s infinite;
+            border-color: #3498db;
+        }
     </style>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
@@ -473,10 +528,13 @@
             <div class="controles">
                 <button onclick="agregarCompas()">+</button>
                 <button onclick="eliminarCompas()">-</button>
+                <button onclick="toggleJSON()" class="toggle-json-btn">Mostrar JSON</button>
+                <button onclick="clearAll()" class="clear-all-btn">Clear All</button>
             </div>
             <div class="partitura" id="partitura">
             </div>
-            <div class="json-container">
+            <div class="json-container" style="display: none;">
+                <button onclick="toggleJSON()" class="toggle-json-btn">Mostrar JSON</button>
                 <div class="json-grid">
                     <div class="json-column">
                         <h4>Partitura Completa</h4>
@@ -498,6 +556,65 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // Agregar esto al inicio del script, antes de las variables globales
+        function toggleJSON() {
+            const jsonContainer = document.querySelector('.json-container');
+            const buttons = document.querySelectorAll('.toggle-json-btn');
+            
+            if (jsonContainer.style.display === 'none') {
+                jsonContainer.style.display = 'block';
+                buttons.forEach(button => button.textContent = 'Ocultar JSON');
+                actualizarJSON();
+            } else {
+                jsonContainer.style.display = 'none';
+                buttons.forEach(button => button.textContent = 'Mostrar JSON');
+            }
+        }
+
+        function clearAll() {
+            if (confirm('¿Está seguro que desea eliminar todos los compases? Esta acción no se puede deshacer.')) {
+                // Limpiar partitura
+                const partitura = document.getElementById('partitura');
+                partitura.innerHTML = '';
+                
+                // Limpiar imágenes
+                const imagenesScroll = document.getElementById('imagenes-scroll');
+                imagenesScroll.innerHTML = '';
+                
+                // Reiniciar contadores
+                contadorCompases = 0;
+                contadorImagenes = 0;
+                
+                // Limpiar selecciones
+                compasesSeleccionados.clear();
+                compasSeleccionado = null;
+                acordeSeleccionado = null;
+                letraSeleccionada = null;
+                
+                // Limpiar marcadores del mapa
+                markers.forEach(marker => map.removeLayer(marker));
+                markers.clear();
+                
+                if (tempMarker) {
+                    map.removeLayer(tempMarker);
+                    tempMarker = null;
+                }
+                
+                // Ocultar botón de ubicar
+                const ubicarBtn = document.getElementById('ubicar-btn');
+                if (ubicarBtn) {
+                    ubicarBtn.style.display = 'none';
+                }
+                
+                // Actualizar JSON
+                actualizarJSON();
+                
+                // Marcar cambios pendientes
+                cambiosPendientes = true;
+            }
+        }
+
+        // Variables globales existentes
         let contadorCompases = 0;
         let acordeSeleccionado = null;
         let letraSeleccionada = null;
@@ -566,17 +683,37 @@
             try {
                 guardandoCambios = true;
                 const estado = generarJSONEstado();
+                
+                // Guardar en cookies de forma síncrona
+                const maxLength = 4000;
+                const chunks = Math.ceil(estado.length / maxLength);
+                
+                setCookie('estado_chunks', chunks, {
+                    maxAge: 86400,
+                    SameSite: 'Strict',
+                    Secure: window.location.protocol === 'https:'
+                });
+                
+                for (let i = 0; i < chunks; i++) {
+                    const chunk = estado.substr(i * maxLength, maxLength);
+                    setCookie(`estado_${i}`, chunk, {
+                        maxAge: 86400,
+                        SameSite: 'Strict',
+                        Secure: window.location.protocol === 'https:'
+                    });
+                }
+                
                 ultimoEstadoJSON = estado;
                 cambiosPendientes = false;
                 
+                // Actualizar visualización del JSON de forma síncrona
                 const jsonOutput = document.getElementById('json-output');
                 if (jsonOutput) {
                     jsonOutput.textContent = JSON.stringify(JSON.parse(estado), null, 2);
                 }
                 
-                console.log('✅ Autoguardado completado:', new Date().toLocaleTimeString());
             } catch (error) {
-                console.error('Error durante el autoguardado:', error);
+                console.error('Error durante el guardado final:', error);
             } finally {
                 guardandoCambios = false;
             }
@@ -725,18 +862,6 @@
                     const nuevoNombre = input.value || 'Sin título';
                     nombreCompas.textContent = nuevoNombre;
                     nuevoCompas.replaceChild(nombreCompas, input);
-
-                    // Actualizar el nombre en el contenedor de imagen si existe
-                    const imagenId = nuevoCompas.getAttribute('data-imagen-id');
-                    if (imagenId) {
-                        const contenedorImagen = document.querySelector(`[data-imagen-id="${imagenId}"]`);
-                        if (contenedorImagen) {
-                            const nombreImagen = contenedorImagen.querySelector('.nombre-imagen');
-                            if (nombreImagen) {
-                                nombreImagen.textContent = nuevoNombre;
-                            }
-                        }
-                    }
                     actualizarJSON();
                 };
 
@@ -812,6 +937,9 @@
             });
 
             cambiosPendientes = true;
+            
+            // Retornar el elemento creado
+            return nuevoCompas;
         }
 
         // Agregar variable global para contar imágenes
@@ -1516,14 +1644,22 @@
             // Actualizar la variable global compasSeleccionado
             compasSeleccionado = compas;
             
+            // Obtener las imágenes asociadas al compás
+            let imagenes = compas.getAttribute('data-imagenes');
+            imagenes = imagenes ? JSON.parse(imagenes) : [];
+            
             if (compasesSeleccionados.has(compas)) {
                 // Si ya está seleccionado, lo deseleccionamos
                 compasesSeleccionados.delete(compas);
                 compas.classList.remove('seleccionado');
-                const imagenVinculada = document.querySelector(`[data-imagen-id="${compas.getAttribute('data-imagen-id')}"].imagen-compas`);
-                if (imagenVinculada) {
-                    imagenVinculada.classList.remove('seleccionado');
-                }
+                
+                // Deseleccionar todas las imágenes vinculadas
+                imagenes.forEach(imagen => {
+                    const contenedorImagen = document.querySelector(`[data-imagen-id="${imagen.id}"]`);
+                    if (contenedorImagen) {
+                        contenedorImagen.classList.remove('seleccionado');
+                    }
+                });
                 
                 // Eliminar el marcador correspondiente
                 const markerId = compas.getAttribute('data-marker-id');
@@ -1535,10 +1671,20 @@
                 // Si no está seleccionado, lo añadimos a la selección
                 compasesSeleccionados.add(compas);
                 compas.classList.add('seleccionado');
-                const imagenVinculada = document.querySelector(`[data-imagen-id="${compas.getAttribute('data-imagen-id')}"].imagen-compas`);
-                if (imagenVinculada) {
-                    imagenVinculada.classList.add('seleccionado');
-                }
+                
+                // Seleccionar todas las imágenes vinculadas
+                imagenes.forEach(imagen => {
+                    const contenedorImagen = document.querySelector(`[data-imagen-id="${imagen.id}"]`);
+                    if (contenedorImagen) {
+                        contenedorImagen.classList.add('seleccionado');
+                        
+                        // Hacer scroll hasta la imagen seleccionada
+                        const imagenesScroll = document.getElementById('imagenes-scroll');
+                        if (imagenesScroll) {
+                            contenedorImagen.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }
+                });
             }
 
             // Actualizar marcadores y vista del mapa
@@ -1621,30 +1767,50 @@
 
         window.addEventListener('beforeunload', (e) => {
             if (cambiosPendientes && !guardandoCambios) {
-                // Mostrar diálogo de confirmación
-                e.preventDefault();
-                e.returnValue = ''; // Requerido para algunos navegadores
-                
-                // Intentar guardar los cambios de forma síncrona
                 try {
+                    // Realizar guardado síncrono
                     guardandoCambios = true;
+                    
+                    // Generar y guardar el estado inmediatamente
                     const estado = generarJSONEstado();
+                    
+                    // Guardar en cookies de forma síncrona
+                    const maxLength = 4000;
+                    const chunks = Math.ceil(estado.length / maxLength);
+                    
+                    setCookie('estado_chunks', chunks, {
+                        maxAge: 86400,
+                        SameSite: 'Strict',
+                        Secure: window.location.protocol === 'https:'
+                    });
+                    
+                    for (let i = 0; i < chunks; i++) {
+                        const chunk = estado.substr(i * maxLength, maxLength);
+                        setCookie(`estado_${i}`, chunk, {
+                            maxAge: 86400,
+                            SameSite: 'Strict',
+                            Secure: window.location.protocol === 'https:'
+                        });
+                    }
+                    
                     ultimoEstadoJSON = estado;
                     cambiosPendientes = false;
                     
-                    // Actualizar la visualización del JSON
+                    // Actualizar visualización del JSON de forma síncrona
                     const jsonOutput = document.getElementById('json-output');
                     if (jsonOutput) {
                         jsonOutput.textContent = JSON.stringify(JSON.parse(estado), null, 2);
                     }
                     
-                    console.log('✅ Guardado final completado:', new Date().toLocaleTimeString());
                 } catch (error) {
                     console.error('Error durante el guardado final:', error);
                 } finally {
                     guardandoCambios = false;
                 }
                 
+                // Mostrar mensaje de confirmación
+                e.preventDefault();
+                e.returnValue = '¿Está seguro de que desea salir? Hay cambios sin guardar.';
                 return e.returnValue;
             }
         });
@@ -1785,18 +1951,19 @@
             
             // Limpiar el estado actual
             const partitura = document.getElementById('partitura');
+            if (!partitura) return;
+            
             partitura.innerHTML = '';
             
             // Restaurar cada compás
             estado.compases.forEach(compasData => {
                 const compas = agregarCompas();
+                if (!compas) return; // Verificar que el compás se creó correctamente
                 
                 // Restaurar nombre
-                if (compasData.nombre) {
-                    const nombreCompas = compas.querySelector('.nombre-compas');
-                    if (nombreCompas) {
-                        nombreCompas.textContent = compasData.nombre;
-                    }
+                const nombreCompas = compas.querySelector('.nombre-compas');
+                if (nombreCompas && compasData.nombre) {
+                    nombreCompas.textContent = compasData.nombre;
                 }
                 
                 // Restaurar ubicación
@@ -1808,16 +1975,29 @@
                 // Restaurar elementos
                 if (compasData.elementos && compasData.elementos.length > 0) {
                     const acordesDiv = compas.querySelector('.acordes');
-                    acordesDiv.innerHTML = ''; // Limpiar elementos por defecto
-                    
-                    compasData.elementos.forEach(elemento => {
-                        agregarAcordeYLetra(acordesDiv, elemento.acorde, elemento.letra);
-                    });
+                    if (acordesDiv) {
+                        acordesDiv.innerHTML = ''; // Limpiar elementos por defecto
+                        
+                        compasData.elementos.forEach(elemento => {
+                            agregarAcordeYLetra(acordesDiv, elemento.acorde, elemento.letra);
+                        });
+                    }
                 }
             });
             
             actualizarNumerosCompases();
         }
+
+        // Asegurarse de que el CSS para la selección de imágenes esté definido
+        const style = document.createElement('style');
+        style.textContent = `
+            .imagen-compas.seleccionado {
+                background-color: rgba(33, 150, 243, 0.1);
+                border: 2px solid #2196f3;
+                box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 
