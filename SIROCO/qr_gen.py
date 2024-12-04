@@ -9,6 +9,7 @@ import re
 # Configuración de márgenes y espaciado
 MARGEN_POR_LINEA = 5  # Ajusta este valor para cambiar el margen extra por cada línea
 TAMANO_TEXTO_GENERO = 20  # Ajusta este valor para cambiar el tamaño del texto de género/disciplina
+CARACTERES_POR_LINEA = 80  # Nueva constante para controlar el número de caracteres por línea
 
 def eliminar_emojis(texto):
     # Usar una expresión regular para eliminar emojis
@@ -82,14 +83,22 @@ def procesar_entrada(row):
     # Eliminar emojis del texto de género/disciplina
     texto = eliminar_emojis(row['#género #disciplina'])
     
-    # Insertar saltos de línea cada 48 caracteres
+    # Insertar saltos de línea cada CARACTERES_POR_LINEA caracteres (máximo 2 líneas)
     lineas = []
-    while len(texto) > 48:
-        corte = texto.rfind(' ', 0, 48)
+    while len(texto) > CARACTERES_POR_LINEA and len(lineas) < 1:
+        corte = texto.rfind(' ', 0, CARACTERES_POR_LINEA)
         if corte == -1:
-            corte = 48
+            corte = CARACTERES_POR_LINEA
         lineas.append(texto[:corte])
         texto = texto[corte:].strip()
+    
+    # Truncar la última línea a CARACTERES_POR_LINEA caracteres si es necesario
+    if len(texto) > CARACTERES_POR_LINEA:
+        corte = texto.rfind(' ', 0, CARACTERES_POR_LINEA)
+        if corte == -1:
+            texto = texto[:CARACTERES_POR_LINEA]
+        else:
+            texto = texto[:corte]
     lineas.append(texto)
     
     x_pos = 20
